@@ -82,3 +82,100 @@ class UserProfileUpdateView(generics.RetrieveUpdateAPIView):
 
     def get_object(self):
         return self.request.user
+
+        from django.shortcuts import render
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+import json
+
+# 1. Admin Dashboard Stats Endpoint
+def admin_dashboard_stats(request):
+    data = {
+        "status": "success",
+        "total_users": 120,
+        "total_educators": 24,
+        "ai_operations": "1,482",
+        "pending_approvals": 1
+    }
+    return JsonResponse(data)
+
+# 2. Approve Teacher Endpoint
+@csrf_exempt
+def approve_teacher(request):
+    if request.method == 'POST':
+        try:
+            body = json.loads(request.body)
+            teacher_name = body.get('teacher_name')
+            return JsonResponse({"status": "success", "message": f"{teacher_name} approved successfully"})
+        except Exception as e:
+            return JsonResponse({"status": "error", "message": str(e)}, status=400)
+
+# 3. Reject Teacher Endpoint
+@csrf_exempt
+def reject_teacher(request):
+    if request.method == 'POST':
+        try:
+            body = json.loads(request.body)
+            teacher_name = body.get('teacher_name')
+            reason = body.get('reason')
+            return JsonResponse({"status": "success", "message": f"{teacher_name} rejected"})
+        except Exception as e:
+            return JsonResponse({"status": "error", "message": str(e)}, status=400)
+
+# 4. Create New Course Endpoint
+@csrf_exempt
+def create_course(request):
+    if request.method == 'POST':
+        try:
+            body = json.loads(request.body)
+            title = body.get('title')
+            return JsonResponse({"status": "success", "message": f"Course {title} deployed"})
+        except Exception as e:
+            return JsonResponse({"status": "error", "message": str(e)}, status=400)
+
+            # 5. Admin Update Profile Endpoint
+@csrf_exempt
+def update_admin_profile(request):
+    if request.method == 'POST':
+        try:
+            body = json.loads(request.body)
+            full_name = body.get('full_name')
+            email = body.get('email')
+            # Profile DB Save Logic
+            return JsonResponse({"status": "success", "message": "Profile updated successfully"})
+        except Exception as e:
+            return JsonResponse({"status": "error", "message": str(e)}, status=400)
+
+# 6. Admin Change Password Endpoint
+@csrf_exempt
+def change_admin_password(request):
+    if request.method == 'POST':
+        try:
+            body = json.loads(request.body)
+            # Password Change Logic
+            return JsonResponse({"status": "success", "message": "Password changed successfully"})
+        except Exception as e:
+            return JsonResponse({"status": "error", "message": str(e)}, status=400)
+
+            # 7. Student Assignments Endpoint
+def student_assignments(request):
+    data = {
+        "status": "success",
+        "assignments": [
+            { "id": 1, "title": "UI Design Homework", "course": "Graphic Designing", "due": "2026-04-15", "status": "Pending" },
+            { "id": 2, "title": "WordPress Project", "course": "Wordpress Web Development", "due": "2026-04-18", "status": "Pending" },
+            { "id": 3, "title": "Freelancing Case Study", "course": "Fiverr Freelancing", "due": "2026-04-20", "status": "Pending" }
+        ]
+    }
+    return JsonResponse(data)
+
+# 8. Complete Student Assignment Endpoint
+@csrf_exempt
+def complete_assignment(request):
+    if request.method == 'POST':
+        try:
+            body = json.loads(request.body)
+            assignment_id = body.get('assignment_id')
+            return JsonResponse({"status": "success", "message": f"Assignment {assignment_id} completed"})
+        except Exception as e:
+            return JsonResponse({"status": "error", "message": str(e)}, status=400)

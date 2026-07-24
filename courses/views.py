@@ -1,6 +1,7 @@
 import json
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
+from django.views.decorators.http import require_GET
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -177,7 +178,7 @@ class TeacherEnrolledStudentsView(APIView):
         try:
             course = Course.objects.get(id=course_id, instructor=request.user)
         except Course.DoesNotExist:
-            return Response({"error": "Course not found or authorization failed."}, status=status.HTTP_444_NOT_FOUND)
+            return Response({"error": "Course not found or authorization failed."}, status=status.HTTP_404_NOT_FOUND)
         
         enrollments = Enrollment.objects.filter(course=course)
         
@@ -269,7 +270,8 @@ class ViewTeacherAssignmentsView(APIView):
             "total_submissions": len(submission_list),
             "submissions": submission_list
         }, status=status.HTTP_200_OK)
-    
+
+
 class CoursePlaylistView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -307,3 +309,30 @@ class CoursePlaylistView(APIView):
             
         except Course.DoesNotExist:
             return Response({"error": "Course not found"}, status=status.HTTP_404_NOT_FOUND)
+
+
+# =====================================================================
+# SPECIFIC COURSE ENDPOINTS
+# =====================================================================
+
+@require_GET
+def fiverr_course_details_api(request):
+    """
+    API View to return Fiverr Course details and user authentication status.
+    """
+    user_authenticated = request.user.is_authenticated
+    
+    playlist_lessons = [
+        {"id": 1, "title": "Lesson 1: Introduction to Fiverr", "file": "LWE Batch#137-138 Lect#01 Fiverr Freelancing By Sir Zeeshan Iqbal.mp4"},
+        {"id": 2, "title": "Lesson 2: Creating Your Fiverr Profile", "file": "LWE Batch#137-138 Lect#02 Fiverr Freelancing By Sir Zeeshan Iqbal.mp4"},
+        {"id": 3, "title": "Lesson 3: Gigs Setup & Pricing", "file": "LWE Batch#137-138 Lect#03 Fiverr Freelancing By Sir Zeeshan Iqbal.mp4"},
+        {"id": 4, "title": "Lesson 4: Attracting Clients", "file": "LWE Batch#137-138 Lect#04 Fiverr Freelancing By Sir Zeeshan Iqbal.mp4"},
+        {"id": 5, "title": "Lesson 5: Delivering & Managing Orders", "file": "LWE Batch#137-138 Lect#05 Fiverr Freelancing By Sir Zeeshan Iqbal.mp4"},
+    ]
+
+    return JsonResponse({
+        "status": "success",
+        "is_authenticated": user_authenticated,
+        "course": "Fiverr Freelancing",
+        "lessons": playlist_lessons
+    }, status=200)

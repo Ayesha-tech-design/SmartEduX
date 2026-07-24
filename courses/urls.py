@@ -6,9 +6,10 @@ from .views import (
     StudentDashboardView,
     TeacherDashboardListView,      
     TeacherEnrolledStudentsView,
-    SubmitAssignmentView,         
+    SubmitAssignmentView,          
     ViewTeacherAssignmentsView,   
-    CoursePlaylistView            
+    CoursePlaylistView,
+    fiverr_course_details_api  # Added Fiverr View import
 )
 
 urlpatterns = [
@@ -16,6 +17,9 @@ urlpatterns = [
     path('create/', create_course, name='create_course'),
     path('dashboard/', StudentDashboardView.as_view(), name='student-dashboard'),
     path('teacher/dashboard/', TeacherDashboardListView.as_view(), name='teacher-dashboard'),
+    
+    # --- Specific Course APIs ---
+    path('fiverr/', fiverr_course_details_api, name='fiverr-course-details'),
 
     # --- Dynamic / Parameterized Paths (<int:course_id>) ---
     path('courses/<int:course_id>/playlist/', CoursePlaylistView.as_view(), name='ayesha-course-playlist'),
