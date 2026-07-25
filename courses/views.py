@@ -277,15 +277,11 @@ class CoursePlaylistView(APIView):
 
     def get(self, request, course_id):
         try:
-            # 1. Course fetch karein
             course = Course.objects.get(id=course_id)
-            
-            # 2. Is course ke modules fetch karein (jo sequence mein honge)
             modules = course.modules.all()
             
             playlist_data = []
             for module in modules:
-                # 3. Har module ke andar ke lessons fetch karein
                 lessons = module.lessons.all().order_by('sequence')
                 lesson_list = []
                 for lesson in lessons:
@@ -335,4 +331,58 @@ def fiverr_course_details_api(request):
         "is_authenticated": user_authenticated,
         "course": "Fiverr Freelancing",
         "lessons": playlist_lessons
+    }, status=200)
+
+
+@require_GET
+def graphics_course_details_api(request):
+    """
+    API View to return Graphics Designing Course details and user authentication status.
+    """
+    user_authenticated = request.user.is_authenticated
+    
+    playlist_lessons = [
+        {"id": 1, "title": "Lesson 1: Introduction to Graphic Designing", "file": "LWE Batch#137-138 Lect#02 Graphic Designing By Miss Memoona Mukhtar.mp4"},
+        {"id": 2, "title": "Lesson 2: Tools Overview (Photoshop, Illustrator)", "file": "LWE Batch#137-138 Lect#03 Graphic Designing By Miss Memoona Mukhtar.mp4"},
+        {"id": 3, "title": "Lesson 3: Basic Design Principles", "file": "LWE Batch#137-138 Lect#05 Graphic Designing By Miss Memoona Mukhtar.mp4"},
+        {"id": 4, "title": "Lesson 4: Social Media Graphics", "file": "LWE Batch#137-138 Lect#09 Graphic Designing By Miss Memoona Mukhtar.mp4"},
+        {"id": 5, "title": "Lesson 5: Portfolio Project", "file": "LWE Batch#137-138 Lect#08 Graphic Designing By Miss Memoona Mukhtar.mp4"},
+    ]
+
+    return JsonResponse({
+        "status": "success",
+        "is_authenticated": user_authenticated,
+        "course": "Graphic Designing",
+        "lessons": playlist_lessons
+    }, status=200)
+
+    @require_GET
+def infosec_course_details_api(request):
+    """
+    API View to return Information Security Course details and user authentication status.
+    """
+    user_authenticated = request.user.is_authenticated
+    
+    return JsonResponse({
+        "status": "success",
+        "is_authenticated": user_authenticated,
+        "course": "Information Security",
+        "total_lessons": 15
+    }, status=200)
+
+    @require_GET
+def teacher_verification_status_api(request):
+    """
+    API View to return teacher verification status.
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "Authentication required"}, status=401)
+    
+    # User status check (is_active ya custom role status)
+    user_status = getattr(request.user, 'status', 'pending')
+    
+    return JsonResponse({
+        "status": user_status,  # Options: 'pending', 'approved', 'rejected'
+        "username": request.user.username,
+        "reason": getattr(request.user, 'rejection_reason', '')
     }, status=200)
