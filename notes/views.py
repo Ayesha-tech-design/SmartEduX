@@ -6,6 +6,7 @@ from django.shortcuts import render
 from django.conf import settings
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_GET
 from rest_framework.decorators import api_view, permission_classes 
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -248,11 +249,9 @@ def fetch_history(request):
         
     except Exception as err:
         return Response({"status": "failed", "error": str(err)}, status=500)
-<<<<<<< HEAD
-    
-    from django.http import JsonResponse
-from django.views.decorators.http import require_GET
 
+
+# === Features Overview API ===
 @require_GET
 def features_overview_api(request):
     """
@@ -268,12 +267,13 @@ def features_overview_api(request):
         "status": "success",
         "user": user_data
     }, status=200)
-=======
+
+
+# === Student Notes APIs ===
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def student_notes_api(request):
     try:
-        # User ke save kiye gaye video notes fetch karein
         notes = VideoNote.objects.filter(user=request.user).order_by('-created_at')
         data = [{
             "id": note.id,
@@ -284,6 +284,7 @@ def student_notes_api(request):
         return Response(data, status=200)
     except Exception as err:
         return Response({"status": "failed", "error": str(err)}, status=500)
+
 
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticated])
@@ -296,4 +297,3 @@ def delete_student_note_api(request, note_id):
         return Response({"success": False, "message": "Note not found!"}, status=404)
     except Exception as err:
         return Response({"status": "failed", "error": str(err)}, status=500)
->>>>>>> 1449755 (Connected frontend with backend by Ayesha)
