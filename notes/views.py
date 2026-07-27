@@ -350,3 +350,30 @@ def fetch_history(request):
         
     except Exception as err:
         return Response({"status": "failed", "error": str(err)}, status=500)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def student_notes_api(request):
+    try:
+        # User ke save kiye gaye video notes fetch karein
+        notes = VideoNote.objects.filter(user=request.user).order_by('-created_at')
+        data = [{
+            "id": note.id,
+            "title": note.video_title,
+            "date": note.created_at.strftime("%Y-%m-%d"),
+            "content": note.summary
+        } for note in notes]
+        return Response(data, status=200)
+    except Exception as err:
+        return Response({"status": "failed", "error": str(err)}, status=500)
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_student_note_api(request, note_id):
+    try:
+        note = VideoNote.objects.get(id=note_id, user=request.user)
+        note.delete()
+        return Response({"success": True, "message": "Note deleted successfully!"}, status=200)
+    except VideoNote.DoesNotExist:
+        return Response({"success": False, "message": "Note not found!"}, status=404)
+    except Exception as err:
+        return Response({"status": "failed", "error": str(err)}, status=500)
