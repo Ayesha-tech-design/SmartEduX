@@ -9,15 +9,30 @@ from .views import (
     create_course,
     update_admin_profile,
     change_admin_password,
-    student_assignments,       # <-- Added
-    complete_assignment        # <-- Added
+    student_assignments,
+    complete_assignment,
+    student_profile_api, 
+    get_user_profile, 
+    user_list_view, 
+    wordpress_profile_api, 
+    reset_password_api, 
+    forgot_password_api,
+    certificate_data_api
 )
 
 urlpatterns = [
+    # General & User List
+    path('', user_list_view, name='user_list'),
+
     # Auth & Profile Routes
     path('signup/', signup, name='signup'),
     path('login-check/', login_check, name='login_check'),
     path('profile/', UserProfileUpdateView.as_view(), name='profile-update'),
+    path('user-profile/', get_user_profile, name='user_profile_api'),
+    path('wordpress-profile/', wordpress_profile_api, name='wordpress_profile_api'),
+    path('reset-password/', reset_password_api, name='reset_password_api'),
+    path('forgot-password/', forgot_password_api, name='forgot_password_api'),
+    path('certificate-data/', certificate_data_api, name='certificate_data_api'),
 
     # Admin Dashboard API Routes
     path('admin/dashboard-stats/', admin_dashboard_stats, name='admin_dashboard_stats'),

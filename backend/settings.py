@@ -152,7 +152,5 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-# =====================================================================
-# ZUNAIRA'S GEMINI API CONFIGURATION (SYNTAX FIXED)
-# =====================================================================
+
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
