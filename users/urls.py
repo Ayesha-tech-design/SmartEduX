@@ -28,7 +28,8 @@ from .views import (
     forgot_password_api,
     certificate_data_api,
     get_system_settings_api,
-    save_system_settings_api
+    save_system_settings_api,
+    user_status_api
 )
 
 urlpatterns = [
@@ -40,6 +41,7 @@ urlpatterns = [
     path('login-check/', login_check, name='login_check'),
     path('profile/', UserProfileUpdateView.as_view(), name='profile-update'),
     path('user-profile/', get_user_profile, name='user_profile_api'),
+    path('user/status/', user_status_api, name='user_status'),
     path('wordpress-profile/', wordpress_profile_api, name='wordpress_profile_api'),
     path('reset-password/', reset_password_api, name='reset_password_api'),
     path('forgot-password/', forgot_password_api, name='forgot_password_api'),
@@ -76,4 +78,7 @@ urlpatterns = [
     # System Settings API Routes
     path('settings/', get_system_settings_api, name='get_system_settings'),
     path('settings/save/', save_system_settings_api, name='save_system_settings'),
+
+    # Verified Certificates Landing Route
+    path('certificate/feature-info/', certificate_data_api, name='verified_certificate_info'),
 ]

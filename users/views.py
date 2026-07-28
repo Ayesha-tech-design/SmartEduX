@@ -531,15 +531,21 @@ def forgot_password_api(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def certificate_data_api(request):
-    user = request.user
-    display_name = user.first_name if (hasattr(user, 'first_name') and user.first_name) else user.username
+    """
+    Handles GET /certificate-data/ and /certificate/feature-info/
+    """
+    user = request.user if request.user and request.user.is_authenticated else None
+    display_name = (user.first_name if user.first_name else user.username) if user else "Sample Student"
     
     data = {
+        "status": "success",
         "full_name": display_name,
-        "email": user.email,
-        "course_name": getattr(user, 'completed_course', 'Graphics Designing')
+        "email": user.email if user else "student@smartedux.edu",
+        "course_name": getattr(user, 'completed_course', 'Graphics Designing') if user else "Graphics Designing",
+        "sample_certificate_id": "SMART-EDU-2026-9921",
+        "is_authenticated": bool(user)
     }
     return Response(data)
 
@@ -583,3 +589,22 @@ def save_system_settings_api(request):
         })
     except Exception as e:
         return Response({"status": "error", "message": str(e)}, status=400)
+
+
+# =====================================================================
+# USER STATUS CHECK ENDPOINT
+# =====================================================================
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def user_status_api(request):
+    """
+    Handles GET /user/status/ for landing page auth check
+    """
+    if request.user and request.user.is_authenticated:
+        return Response({
+            "is_authenticated": True,
+            "username": request.user.username,
+            "role": getattr(request.user, 'role', 'student')
+        })
+    return Response({"is_authenticated": False})
