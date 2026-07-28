@@ -26,7 +26,9 @@ from .views import (
     wordpress_profile_api, 
     reset_password_api, 
     forgot_password_api,
-    certificate_data_api
+    certificate_data_api,
+    get_system_settings_api,
+    save_system_settings_api
 )
 
 urlpatterns = [
@@ -70,4 +72,8 @@ urlpatterns = [
     # Student Assignments API Routes
     path('student/assignments/', student_assignments, name='student_assignments'),
     path('student/complete-assignment/', complete_assignment, name='complete_assignment'),
+
+    # System Settings API Routes
+    path('settings/', get_system_settings_api, name='get_system_settings'),
+    path('settings/save/', save_system_settings_api, name='save_system_settings'),
 ]

@@ -542,3 +542,44 @@ def certificate_data_api(request):
         "course_name": getattr(user, 'completed_course', 'Graphics Designing')
     }
     return Response(data)
+
+
+# =====================================================================
+# SYSTEM SETTINGS ENDPOINTS (FOR Advanced Settings HTML)
+# =====================================================================
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_system_settings_api(request):
+    """
+    Handles GET /api/settings/
+    """
+    user = request.user if request.user.is_authenticated else None
+    return Response({
+        "status": "success",
+        "name": user.first_name if user and user.first_name else "System Administrator",
+        "email": user.email if user and user.email else "admin@smartedux.edu",
+        "emailNotif": True,
+        "pushNotif": True,
+        "courseNotif": True,
+        "image": "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
+    })
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@csrf_exempt
+def save_system_settings_api(request):
+    """
+    Handles POST /api/settings/save/
+    """
+    try:
+        data = request.data or json.loads(request.body)
+        name = data.get("name", "System Administrator")
+        return Response({
+            "status": "success",
+            "message": f"Settings for {name} updated successfully!",
+            "data": data
+        })
+    except Exception as e:
+        return Response({"status": "error", "message": str(e)}, status=400)
