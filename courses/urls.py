@@ -12,7 +12,8 @@ from .views import (
     fiverr_course_details_api,
     graphics_course_details_api,
     infosec_course_details_api,
-    teacher_verification_status_api  # <--- Teacher verification status view import
+    teacher_verification_status_api,
+    generate_mcqs_view  # <--- MCQ Generator view import
 )
 
 urlpatterns = [
@@ -25,7 +26,8 @@ urlpatterns = [
     path('fiverr/', fiverr_course_details_api, name='fiverr-course-details'),
     path('graphics/', graphics_course_details_api, name='graphics-course-details'),
     path('infosec/', infosec_course_details_api, name='infosec-course-details'),
-    path('teacher/verification-status/', teacher_verification_status_api, name='teacher-verification-status'),  # <--- Status route added
+    path('teacher/verification-status/', teacher_verification_status_api, name='teacher-verification-status'),
+    path('mcqs/generate/', generate_mcqs_view, name='generate-mcqs'),  # <--- MCQ Route
 
     # --- Dynamic / Parameterized Paths (<int:course_id>) ---
     path('courses/<int:course_id>/playlist/', CoursePlaylistView.as_view(), name='ayesha-course-playlist'),

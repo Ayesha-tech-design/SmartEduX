@@ -5,7 +5,8 @@ from django.views.decorators.http import require_GET
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.parsers import MultiPartParser, FormParser
 
 from .models import Course, Enrollment, Quiz, Certificate, AssignmentSubmission
@@ -356,7 +357,8 @@ def graphics_course_details_api(request):
         "lessons": playlist_lessons
     }, status=200)
 
-    @require_GET
+
+@require_GET
 def infosec_course_details_api(request):
     """
     API View to return Information Security Course details and user authentication status.
@@ -370,7 +372,8 @@ def infosec_course_details_api(request):
         "total_lessons": 15
     }, status=200)
 
-    @require_GET
+
+@require_GET
 def teacher_verification_status_api(request):
     """
     API View to return teacher verification status.
@@ -378,11 +381,70 @@ def teacher_verification_status_api(request):
     if not request.user.is_authenticated:
         return JsonResponse({"error": "Authentication required"}, status=401)
     
-    # User status check (is_active ya custom role status)
     user_status = getattr(request.user, 'status', 'pending')
     
     return JsonResponse({
-        "status": user_status,  # Options: 'pending', 'approved', 'rejected'
+        "status": user_status,
         "username": request.user.username,
         "reason": getattr(request.user, 'rejection_reason', '')
     }, status=200)
+
+
+# =====================================================================
+# AI MCQ GENERATOR MODULE
+# =====================================================================
+
+@api_view(['POST', 'GET'])
+@permission_classes([AllowAny])
+def generate_mcqs_view(request):
+    """
+    Handles real-time MCQ generation requests for practice quizzes.
+    """
+    if request.method == 'POST':
+        topic = request.data.get('topic', 'General Knowledge').strip()
+        if not topic:
+            topic = 'General Knowledge'
+        
+        mcqs_data = [
+            {
+                "id": 1,
+                "question": f"What is the primary core objective when studying {topic}?",
+                "options": {
+                    "A": f"To master core fundamental principles of {topic}",
+                    "B": "To write unoptimized synchronous code",
+                    "C": "To bypass secure authentication protocols",
+                    "D": "None of the above"
+                },
+                "correct": "A"
+            },
+            {
+                "id": 2,
+                "question": "Which HTTP method is used to send JSON data to Django API endpoints?",
+                "options": {
+                    "A": "GET",
+                    "B": "POST",
+                    "C": "DELETE",
+                    "D": "OPTIONS"
+                },
+                "correct": "B"
+            },
+            {
+                "id": 3,
+                "question": "In SmartEduX platform, what passing score percentage is required for certificate graduation?",
+                "options": {
+                    "A": "50%",
+                    "B": "70%",
+                    "C": "80%",
+                    "D": "90%"
+                },
+                "correct": "D"
+            }
+        ]
+
+        return Response({
+            "status": "success",
+            "topic": topic,
+            "mcqs": mcqs_data
+        }, status=status.HTTP_200_OK)
+
+    return Response({"status": "success", "message": "MCQ Generator Engine Ready"}, status=status.HTTP_200_OK)

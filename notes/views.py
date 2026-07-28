@@ -12,12 +12,8 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from youtube_transcript_api import YouTubeTranscriptApi
 from google import genai
-from google.genai import types
-from .models import VideoNote, QuizQuestion, UserQuizAttempt
 
-# === AUTHENTICATION IMPORTS ===
-from django.contrib.auth.models import User
-from django.contrib.auth import authenticate, login, logout
+from .models import VideoNote, QuizQuestion, UserQuizAttempt
 
 # PRODUCTION API INITIALIZATION
 RAW_KEY = getattr(settings, "GEMINI_API_KEY", None)
@@ -30,14 +26,16 @@ client = genai.Client(api_key=CLEAN_KEY) if CLEAN_KEY else None
 @permission_classes([AllowAny]) 
 def generate_notes(request):
     try:
-        # Handle both youtube_url and video_url keys from frontend
-        youtube_url = (request.data.get('youtube_url') or request.data.get('video_url') or '').strip()
-        print(f"\n[SMARTEDUX LIVE LOG]: Incoming Link from Frontend: {youtube_url}")
+        raw_url = (request.data.get('youtube_url') or request.data.get('video_url') or '').strip()
+        print(f"\n[SMARTEDUX LIVE LOG]: Processing Incoming URL: {raw_url}")
 
-        if not youtube_url:
-            return Response({"status": "failed", "error": "YouTube URL required"}, status=400)
+        if not raw_url:
+            return Response({"status": "failed", "error": "YouTube URL is required"}, status=400)
 
-        # Video ID Parser
+        # 1. CLEAN URL PARSING (Strip timestamps & tracking parameters)
+        youtube_url = re.sub(r'([?&]t=\d+s?|&ab_channel=[^&]+)', '', raw_url).strip()
+
+        # Extract Video ID
         video_id = ""
         if "v=" in youtube_url:
             video_id = youtube_url.split("v=")[1].split("&")[0]
@@ -46,150 +44,148 @@ def generate_notes(request):
         else:
             video_id = youtube_url.rstrip("/").split("/")[-1]
 
-        if not video_id:
+        if not video_id or len(video_id) < 5:
             return Response({"status": "failed", "error": "Invalid YouTube URL format"}, status=400)
 
-        # 1. CACHE CHECK
-        existing = VideoNote.objects.filter(video_title=video_id).first()
-        if existing:
+        # 2. ACCURATE DATABASE CACHE CHECK (Only return cache if summary belongs to valid format & URL)
+        existing = VideoNote.objects.filter(video_url=youtube_url).order_by('-created_at').first()
+        if existing and existing.summary and "Executive Summary" in existing.summary and "representative example" not in existing.summary:
             saved_questions = existing.questions.all()
-            quiz_list = []
-            for q in saved_questions:
-                quiz_list.append({
+            quiz_list = [
+                {
                     "question": q.question_text,
                     "options": {"A": q.option_a, "B": q.option_b, "C": q.option_c, "D": q.option_d},
                     "answer": q.correct_answer
-                })
-
+                } for q in saved_questions
+            ]
             return Response({
                 "status": "success",
                 "source": "database",
-                "title": f"Notes for Video ({video_id})",
+                "title": existing.video_title or f"Notes for Video ({video_id})",
                 "notes": existing.summary,
                 "summary": existing.summary,
                 "quiz": quiz_list
             })
 
-        # 2. ADVANCED TRANSCRIPT EXTRACTION
-        raw_text = ""
-        source_type = "gemini_transcript"
-        
+        # 3. METADATA EXTRACTION (Fetch exact video title and description via yt_dlp)
+        actual_title = f"YouTube Video ({video_id})"
+        actual_description = ""
         try:
-            transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['en', 'hi'])
-            raw_text = " ".join([item['text'] for item in transcript])
+            ydl_opts = {'quiet': True, 'no_warnings': True, 'skip_download': True}
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(youtube_url, download=False)
+                actual_title = info.get('title', actual_title)
+                actual_description = info.get('description', '')[:3000]
+        except Exception as meta_err:
+            print(f"[METADATA FETCH WARNING]: {meta_err}")
+
+        # 4. TRANSCRIPT EXTRACTION
+        raw_transcript = ""
+        has_transcript = False
+        try:
+            transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['en', 'hi', 'ur', 'es', 'pt'])
+            raw_transcript = " ".join([item['text'] for item in transcript])
+            has_transcript = True
         except Exception:
             try:
                 transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
                 try:
-                    transcript = transcript_list.find_generated_transcript(['en', 'hi']).fetch()
+                    fetched = transcript_list.find_transcript(['en', 'hi', 'ur', 'es', 'pt']).fetch()
                 except Exception:
-                    transcript = transcript_list.find_id_encoded_transcript(['en', 'hi']).fetch()
-                raw_text = " ".join([item['text'] for item in transcript])
+                    fetched = transcript_list.find_generated_transcript(['en', 'hi', 'ur', 'es', 'pt']).fetch()
+                raw_transcript = " ".join([item['text'] for item in fetched])
+                has_transcript = True
             except Exception:
-                try:
-                    ydl_opts = {'quiet': True, 'no_warnings': True}
-                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                        info = ydl.extract_info(youtube_url, download=False)
-                        raw_text = f"Title: {info.get('title', '')}\nDescription: {info.get('description', '')[:1500]}"
-                    source_type = "gemini_metadata_fallback"
-                except Exception:
-                    raw_text = "Standard Educational Domain Video Content Text"
-                    source_type = "fallback"
+                raw_transcript = ""
+                has_transcript = False
 
-        raw_text = raw_text[:12000]
+        if not client:
+            return Response({"status": "failed", "error": "GEMINI_API_KEY is not configured in settings.py"}, status=500)
 
-        # AI PROMPT & GENERATION
-        if client:
+        # 5. DYNAMIC PROMPT BUILDER (Strictly follows user rules)
+        if has_transcript and len(raw_transcript.strip()) > 50:
+            # Mode A: Transcript is present -> Generate strictly from spoken text
             prompt = f"""
-You are SmartEduX AI, an intelligent educational assistant.
-Convert educational video content into high-quality study notes for university students.
+You are SmartEduX AI, an expert educational tutor.
+Generate structured study notes strictly and exclusively from the provided video transcript below.
 
-VIDEO CONTENT:
-{raw_text}
+STRICT RULES:
+1. Base all facts, concepts, and bullet points ONLY on what is spoken in the transcript.
+2. Do NOT add outside topics, unrelated CS/medical theories, or meta-commentary.
+3. Keep the notes concise, clear, and organized for university students.
+
+REQUIRED MARKDOWN FORMAT:
+## 📌 Executive Summary
+(2-3 sentences summarizing the exact video topic)
+
+## 🎯 Key Concepts & Detailed Bullet Points
+(Detailed sub-topics with **bold terms** and bullet points from the transcript)
+
+## 💡 Key Takeaways
+(3-5 actionable summary points)
+
+VIDEO TITLE: {actual_title}
+TRANSCRIPT CONTENT:
+{raw_transcript[:12000]}
 """
-            config = types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=types.Schema(
-                    type=types.Type.OBJECT,
-                    properties={
-                        "summary": types.Schema(type=types.Type.STRING),
-                        "quiz": types.Schema(
-                            type=types.Type.ARRAY,
-                            items=types.Schema(
-                                type=types.Type.OBJECT,
-                                properties={
-                                    "question": types.Schema(type=types.Type.STRING),
-                                    "options": types.Schema(
-                                        type=types.Type.OBJECT,
-                                        properties={
-                                            "A": types.Schema(type=types.Type.STRING),
-                                            "B": types.Schema(type=types.Type.STRING),
-                                            "C": types.Schema(type=types.Type.STRING),
-                                            "D": types.Schema(type=types.Type.STRING),
-                                        }
-                                    ),
-                                    "answer": types.Schema(type=types.Type.STRING),
-                                }
-                            )
-                        )
-                    }
-                )
-            )
-
-            response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=prompt,
-                config=config
-            )
-            data = json.loads(response.text, strict=False)
-            summary_res = data.get("summary", "")
-            generated_quiz = data.get("quiz", [])
         else:
-            summary_res = f"📌 SmartEduX AI Generated Notes for Video ID: {video_id}\n\n1. Concept Overview: Key concepts extracted from YouTube transcript.\n2. Key Highlights: Video summarized into structured study notes.\n3. Summary: Ready for revision and exam preparation."
-            generated_quiz = []
+            # Mode B: Transcript missing -> Gemini uses Title + Description to generate a clear, accurate topic summary
+            prompt = f"""
+You are SmartEduX AI, an expert educational tutor.
+The spoken transcript for this video is unavailable. Generate accurate, topic-specific study notes based on the video title and description.
 
-        # Save to DB if user authenticated
+STRICT RULES:
+1. Focus strictly on the subject matter indicated by the title: "{actual_title}".
+2. Do NOT mention "no transcript provided", "as a representative example", or any meta-commentary.
+3. Do NOT invent unrelated computer science or medical subjects unless the video title/description is explicitly about them.
+4. Provide a clear, educational overview so the student easily understands the core topic of this video.
+
+REQUIRED MARKDOWN FORMAT:
+## 📌 Executive Summary
+(2-3 concise lines explaining what the topic "{actual_title}" is about)
+
+## 🎯 Key Concepts & Detailed Bullet Points
+(Key concepts and principles related strictly to "{actual_title}" with **bold terms**)
+
+## 💡 Key Takeaways
+(3-5 key takeaways for quick understanding)
+
+VIDEO TITLE: {actual_title}
+DESCRIPTION CONTEXT: {actual_description[:3000]}
+"""
+
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt
+        )
+
+        summary_res = response.text if response and response.text else f"## 📌 Executive Summary\nStudy notes compiled for {actual_title}."
+
+        # 6. SAVE TO DATABASE
         if request.user.is_authenticated:
-            video_note_obj = VideoNote.objects.create(
+            VideoNote.objects.create(
                 user=request.user,
-                video_title=video_id,
+                video_title=actual_title,
                 video_url=youtube_url,
-                transcript=raw_text,
+                transcript=raw_transcript or actual_description,
                 summary=summary_res
             )
 
-            for item in generated_quiz:
-                options = item.get("options", {})
-                QuizQuestion.objects.create(
-                    video_note=video_note_obj,
-                    question_text=item.get("question", ""),
-                    option_a=options.get("A", ""),
-                    option_b=options.get("B", ""),
-                    option_c=options.get("C", ""),
-                    option_d=options.get("D", ""),
-                    correct_answer=item.get("answer", "A")
-                )
-
         return Response({
             "status": "success",
-            "source": source_type,
-            "title": f"Notes for Video ({video_id})",
+            "title": actual_title,
             "notes": summary_res,
-            "summary": summary_res,
-            "quiz": generated_quiz
+            "summary": summary_res
         })
 
     except Exception as err:
         print(f"[CRITICAL BACKEND ERROR]: {str(err)}")
         return Response({
-            "status": "success",
-            "title": "SmartEduX AI Summary",
-            "notes": f"📌 SmartEduX AI Generated Notes:\n\n1. Video Transcript Extracted Successfully.\n2. Summarized into core educational bullet points.\n3. Ready for study and PDF/TXT download.",
-            "summary": "AI summary generated."
-        }, status=200)
+            "status": "failed",
+            "error": f"Backend Generation Error: {str(err)}"
+        }, status=500)
 
 
-# Function Alias for compatibility
 @csrf_exempt
 def generate_ai_notes(request):
     return generate_notes(request)
@@ -205,8 +201,8 @@ def save_history(request):
     try:
         title = request.data.get('video_title')
         url = request.data.get('video_url')
-        transcript_text = request.data.get('transcript')
-        summary_text = request.data.get('summary')
+        transcript_text = request.data.get('transcript', '')
+        summary_text = request.data.get('summary', '')
         
         if not title or not url:
             return Response({"status": "failed", "error": "Video title and URL are required"}, status=400)
@@ -254,9 +250,6 @@ def fetch_history(request):
 # === Features Overview API ===
 @require_GET
 def features_overview_api(request):
-    """
-    API view for features.html - Checks user session and returns feature status.
-    """
     user_data = {
         "is_authenticated": request.user.is_authenticated,
         "username": request.user.username if request.user.is_authenticated else "",
