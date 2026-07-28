@@ -47,17 +47,19 @@ def generate_notes(request):
         if not video_id or len(video_id) < 5:
             return Response({"status": "failed", "error": "Invalid YouTube URL format"}, status=400)
 
-        # 2. ACCURATE DATABASE CACHE CHECK (Only return cache if summary belongs to valid format & URL)
+        # 2. ACCURATE DATABASE CACHE CHECK
         existing = VideoNote.objects.filter(video_url=youtube_url).order_by('-created_at').first()
         if existing and existing.summary and "Executive Summary" in existing.summary and "representative example" not in existing.summary:
-            saved_questions = existing.questions.all()
-            quiz_list = [
-                {
-                    "question": q.question_text,
-                    "options": {"A": q.option_a, "B": q.option_b, "C": q.option_c, "D": q.option_d},
-                    "answer": q.correct_answer
-                } for q in saved_questions
-            ]
+            saved_questions = getattr(existing, 'questions', None)
+            quiz_list = []
+            if saved_questions:
+                quiz_list = [
+                    {
+                        "question": q.question_text,
+                        "options": {"A": q.option_a, "B": q.option_b, "C": q.option_c, "D": q.option_d},
+                        "answer": q.correct_answer
+                    } for q in saved_questions.all()
+                ]
             return Response({
                 "status": "success",
                 "source": "database",
@@ -79,76 +81,91 @@ def generate_notes(request):
         except Exception as meta_err:
             print(f"[METADATA FETCH WARNING]: {meta_err}")
 
-        # 4. TRANSCRIPT EXTRACTION
+        # 4. ROBUST MULTI-LANGUAGE TRANSCRIPT EXTRACTION
         raw_transcript = ""
         has_transcript = False
+        
+        # Method 1: Direct Transcript API Fetch
         try:
             transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['en', 'hi', 'ur', 'es', 'pt'])
             raw_transcript = " ".join([item['text'] for item in transcript])
-            has_transcript = True
+            has_transcript = True if len(raw_transcript.strip()) > 30 else False
         except Exception:
+            # Method 2: Fallback List Scanning for Generated Transcripts
             try:
-                transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+                ytt_api = YouTubeTranscriptApi()
+                transcript_list = ytt_api.list_transcripts(video_id) if hasattr(ytt_api, 'list_transcripts') else YouTubeTranscriptApi.list_transcripts(video_id)
+                fetched = None
+                
                 try:
                     fetched = transcript_list.find_transcript(['en', 'hi', 'ur', 'es', 'pt']).fetch()
                 except Exception:
-                    fetched = transcript_list.find_generated_transcript(['en', 'hi', 'ur', 'es', 'pt']).fetch()
-                raw_transcript = " ".join([item['text'] for item in fetched])
-                has_transcript = True
-            except Exception:
+                    try:
+                        fetched = transcript_list.find_generated_transcript(['en', 'hi', 'ur', 'es', 'pt']).fetch()
+                    except Exception:
+                        # Grab first available transcript language as last resort
+                        for tr in transcript_list:
+                            fetched = tr.fetch()
+                            break
+                
+                if fetched and isinstance(fetched, list):
+                    raw_transcript = " ".join([item['text'] if isinstance(item, dict) else getattr(item, 'text', '') for item in fetched])
+                has_transcript = True if len(raw_transcript.strip()) > 30 else False
+            except Exception as tr_err:
+                print(f"[TRANSCRIPT FETCH NOTICE]: {tr_err}")
                 raw_transcript = ""
                 has_transcript = False
 
         if not client:
             return Response({"status": "failed", "error": "GEMINI_API_KEY is not configured in settings.py"}, status=500)
 
-        # 5. DYNAMIC PROMPT BUILDER (Strictly follows user rules)
+        # 5. DYNAMIC HIGH-ACCURACY PROMPT BUILDER
         if has_transcript and len(raw_transcript.strip()) > 50:
-            # Mode A: Transcript is present -> Generate strictly from spoken text
+            # Mode A: Transcript is present -> Generate strictly from spoken text & video content
             prompt = f"""
 You are SmartEduX AI, an expert educational tutor.
-Generate structured study notes strictly and exclusively from the provided video transcript below.
+Generate structured study notes strictly and exclusively from the provided spoken video transcript below.
 
 STRICT RULES:
-1. Base all facts, concepts, and bullet points ONLY on what is spoken in the transcript.
-2. Do NOT add outside topics, unrelated CS/medical theories, or meta-commentary.
+1. Base all facts, concepts, slides, and bullet points ONLY on what is actually discussed in the transcript.
+2. Do NOT add generic outside definitions or unrelated theories.
 3. Keep the notes concise, clear, and organized for university students.
 
 REQUIRED MARKDOWN FORMAT:
 ## 📌 Executive Summary
-(2-3 sentences summarizing the exact video topic)
+(2-3 sentences summarizing the exact topic explained in this video)
 
 ## 🎯 Key Concepts & Detailed Bullet Points
-(Detailed sub-topics with **bold terms** and bullet points from the transcript)
+(List the exact points, challenges, principles, or slides explained in the transcript with **bold terms**)
 
 ## 💡 Key Takeaways
-(3-5 actionable summary points)
+(3-5 actionable summary points directly from the video)
 
 VIDEO TITLE: {actual_title}
 TRANSCRIPT CONTENT:
-{raw_transcript[:12000]}
+{raw_transcript[:14000]}
 """
         else:
-            # Mode B: Transcript missing -> Gemini uses Title + Description to generate a clear, accurate topic summary
+            # Mode B: Transcript missing -> Gemini strictly focuses on the Specific Video Title
             prompt = f"""
 You are SmartEduX AI, an expert educational tutor.
-The spoken transcript for this video is unavailable. Generate accurate, topic-specific study notes based on the video title and description.
+The spoken transcript for this video is unavailable. Generate accurate, highly specific study notes strictly based on the exact video title: "{actual_title}".
 
-STRICT RULES:
-1. Focus strictly on the subject matter indicated by the title: "{actual_title}".
-2. Do NOT mention "no transcript provided", "as a representative example", or any meta-commentary.
-3. Do NOT invent unrelated computer science or medical subjects unless the video title/description is explicitly about them.
-4. Provide a clear, educational overview so the student easily understands the core topic of this video.
+CRITICAL INSTRUCTION:
+1. Focus strictly on the specific topic indicated by the title "{actual_title}". 
+2. If the title mentions specific items like "10 Security Challenges", "Types", "Algorithms", or "Steps", explicitly enumerate and explain those specific points.
+3. Do NOT just output general subject definitions (e.g., if title is "Security Challenges", do NOT just explain basic CIA Triad definitions, focus directly on the core challenges!).
+4. Do NOT mention "transcript unavailable" or any meta-commentary.
 
 REQUIRED MARKDOWN FORMAT:
 ## 📌 Executive Summary
-(2-3 concise lines explaining what the topic "{actual_title}" is about)
+(2-3 concise lines explaining specifically what "{actual_title}" covers)
 
-## 🎯 Key Concepts & Detailed Bullet Points
-(Key concepts and principles related strictly to "{actual_title}" with **bold terms**)
+## 🎯 Key Concepts & Detailed Points
+(Detailed breakdown of points specifically regarding "{actual_title}")
 
 ## 💡 Key Takeaways
-(3-5 key takeaways for quick understanding)
+(3-5 key takeaways regarding "{actual_title}")
 
 VIDEO TITLE: {actual_title}
 DESCRIPTION CONTEXT: {actual_description[:3000]}
