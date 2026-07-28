@@ -356,7 +356,8 @@ def graphics_course_details_api(request):
         "lessons": playlist_lessons
     }, status=200)
 
-    @require_GET
+
+@require_GET
 def infosec_course_details_api(request):
     """
     API View to return Information Security Course details and user authentication status.
@@ -370,7 +371,8 @@ def infosec_course_details_api(request):
         "total_lessons": 15
     }, status=200)
 
-    @require_GET
+
+@require_GET
 def teacher_verification_status_api(request):
     """
     API View to return teacher verification status.
@@ -378,7 +380,6 @@ def teacher_verification_status_api(request):
     if not request.user.is_authenticated:
         return JsonResponse({"error": "Authentication required"}, status=401)
     
-    # User status check (is_active ya custom role status)
     user_status = getattr(request.user, 'status', 'pending')
     
     return JsonResponse({
