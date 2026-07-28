@@ -10,6 +10,11 @@ from .views import (
     admin_recent_activities_api,
     admin_system_backup_api,
     admin_save_settings_api,
+    admin_profile_detail_api,
+    change_user_password_api,
+    admin_preferences_api,
+    logout_all_devices_api,
+    upload_profile_image_api,
     create_course,
     update_admin_profile,
     change_admin_password,
@@ -38,6 +43,13 @@ urlpatterns = [
     path('forgot-password/', forgot_password_api, name='forgot_password_api'),
     path('certificate-data/', certificate_data_api, name='certificate_data_api'),
 
+    # User Profile Endpoints (Used by admin profile.html)
+    path('user/profile/', admin_profile_detail_api, name='user_profile_detail'),
+    path('user/profile/update/', admin_profile_detail_api, name='user_profile_update'),
+    path('user/change-password/', change_user_password_api, name='user_change_password'),
+    path('user/profile/image/', upload_profile_image_api, name='upload_profile_image'),
+    path('auth/logout-all/', logout_all_devices_api, name='logout_all_devices'),
+
     # Admin Dashboard API Routes
     path('admin/stats/', admin_dashboard_stats, name='admin_dashboard_stats'),
     path('admin/dashboard-stats/', admin_dashboard_stats, name='admin_dashboard_stats_alt'),
@@ -48,6 +60,7 @@ urlpatterns = [
     path('admin/recent-activities/', admin_recent_activities_api, name='admin_recent_activities'),
     path('admin/backup/', admin_system_backup_api, name='admin_system_backup'),
     path('admin/settings/', admin_save_settings_api, name='admin_save_settings'),
+    path('admin/preferences/', admin_preferences_api, name='admin_preferences'),
     path('admin/create-course/', create_course, name='create_course'),
 
     # Admin Profile API Routes
