@@ -319,27 +319,41 @@ def change_admin_password(request):
             return JsonResponse({"status": "error", "message": str(e)}, status=400)
 
 
+@api_view(['GET'])
+@permission_classes([AllowAny])
 def student_assignments(request):
+    """
+    Updated for assignments.html integration
+    """
     data = {
         "status": "success",
+        "courses_count": 3,
+        "gpa": "3.8",
         "assignments": [
             { "id": 1, "title": "UI Design Homework", "course": "Graphic Designing", "due": "2026-04-15", "status": "Pending" },
             { "id": 2, "title": "WordPress Project", "course": "Wordpress Web Development", "due": "2026-04-18", "status": "Pending" },
             { "id": 3, "title": "Freelancing Case Study", "course": "Fiverr Freelancing", "due": "2026-04-20", "status": "Pending" }
         ]
     }
-    return JsonResponse(data)
+    return Response(data)
 
 
+@api_view(['POST'])
+@permission_classes([AllowAny])
 @csrf_exempt
 def complete_assignment(request):
-    if request.method == 'POST':
-        try:
-            body = json.loads(request.body)
-            assignment_id = body.get('assignment_id')
-            return JsonResponse({"status": "success", "message": f"Assignment {assignment_id} completed"})
-        except Exception as e:
-            return JsonResponse({"status": "error", "message": str(e)}, status=400)
+    """
+    Updated for assignments.html completion action
+    """
+    try:
+        data = request.data or {}
+        assignment_id = data.get('assignment_id', 'N/A')
+        return Response({
+            "status": "success", 
+            "message": f"Assignment {assignment_id} marked as completed successfully!"
+        })
+    except Exception as e:
+        return Response({"status": "error", "message": str(e)}, status=400)
 
 
 # =====================================================================
