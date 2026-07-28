@@ -437,7 +437,7 @@ def generate_mcqs_view(request):
                     "C": "80%",
                     "D": "90%"
                 },
-                "correct": "D"
+                "correct": "C"
             }
         ]
 

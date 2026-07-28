@@ -4,8 +4,12 @@ from .views import (
     login_check, 
     UserProfileUpdateView,
     admin_dashboard_stats, 
+    admin_pending_teachers_api,
     approve_teacher, 
     reject_teacher, 
+    admin_recent_activities_api,
+    admin_system_backup_api,
+    admin_save_settings_api,
     create_course,
     update_admin_profile,
     change_admin_password,
@@ -35,9 +39,15 @@ urlpatterns = [
     path('certificate-data/', certificate_data_api, name='certificate_data_api'),
 
     # Admin Dashboard API Routes
-    path('admin/dashboard-stats/', admin_dashboard_stats, name='admin_dashboard_stats'),
-    path('admin/approve-teacher/', approve_teacher, name='approve_teacher'),
+    path('admin/stats/', admin_dashboard_stats, name='admin_dashboard_stats'),
+    path('admin/dashboard-stats/', admin_dashboard_stats, name='admin_dashboard_stats_alt'),
+    path('admin/pending-teachers/', admin_pending_teachers_api, name='admin_pending_teachers'),
+    path('admin/approve-teacher/', approve_teacher, name='approve_teacher_base'),
+    path('admin/approve-teacher/<int:teacher_id>/', approve_teacher, name='approve_teacher_id'),
     path('admin/reject-teacher/', reject_teacher, name='reject_teacher'),
+    path('admin/recent-activities/', admin_recent_activities_api, name='admin_recent_activities'),
+    path('admin/backup/', admin_system_backup_api, name='admin_system_backup'),
+    path('admin/settings/', admin_save_settings_api, name='admin_save_settings'),
     path('admin/create-course/', create_course, name='create_course'),
 
     # Admin Profile API Routes
