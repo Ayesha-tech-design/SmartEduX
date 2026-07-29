@@ -1,41 +1,37 @@
 from django.urls import path
 from .views import (
-    create_course, 
-    EnrollInCourseView, 
-    SubmitQuizView, 
+    create_course,
+    EnrollInCourseView,
+    SubmitQuizView,
     StudentDashboardView,
-    TeacherDashboardListView,      
+    TeacherDashboardListView,
     TeacherEnrolledStudentsView,
-    SubmitAssignmentView,          
-    ViewTeacherAssignmentsView,   
+    SubmitAssignmentView,
+    ViewTeacherAssignmentsView,
     CoursePlaylistView,
     fiverr_course_details_api,
     graphics_course_details_api,
     infosec_course_details_api,
     teacher_verification_status_api,
-    generate_mcqs_view  # <--- MCQ Generator view import
+    generate_mcqs_view  # <-- Make sure this is imported
 )
 
 urlpatterns = [
-    # --- Static / Specific Paths (Hamesha upar hone chahiye) ---
     path('create/', create_course, name='create_course'),
-    path('dashboard/', StudentDashboardView.as_view(), name='student-dashboard'),
-    path('teacher/dashboard/', TeacherDashboardListView.as_view(), name='teacher-dashboard'),
+    path('enroll/<int:course_id>/', EnrollInCourseView.as_view(), name='enroll_course'),
+    path('submit-quiz/<int:course_id>/', SubmitQuizView.as_view(), name='submit_quiz'),
+    path('student-dashboard/', StudentDashboardView.as_view(), name='student_dashboard'),
+    path('teacher-dashboard/', TeacherDashboardListView.as_view(), name='teacher_dashboard'),
+    path('teacher/enrolled-students/<int:course_id>/', TeacherEnrolledStudentsView.as_view(), name='teacher_enrolled_students'),
+    path('submit-assignment/<int:course_id>/', SubmitAssignmentView.as_view(), name='submit_assignment'),
+    path('teacher/assignments/<int:course_id>/', ViewTeacherAssignmentsView.as_view(), name='view_teacher_assignments'),
+    path('playlist/<int:course_id>/', CoursePlaylistView.as_view(), name='course_playlist'),
+    path('fiverr-details/', fiverr_course_details_api, name='fiverr_details'),
+    path('graphics-details/', graphics_course_details_api, name='graphics_details'),
+    path('infosec-details/', infosec_course_details_api, name='infosec_details'),
+    path('teacher-status/', teacher_verification_status_api, name='teacher_status'),
     
-    # --- Specific Course & Status APIs ---
-    path('fiverr/', fiverr_course_details_api, name='fiverr-course-details'),
-    path('graphics/', graphics_course_details_api, name='graphics-course-details'),
-    path('infosec/', infosec_course_details_api, name='infosec-course-details'),
-    path('teacher/verification-status/', teacher_verification_status_api, name='teacher-verification-status'),
-    path('mcqs/generate/', generate_mcqs_view, name='generate-mcqs'),  # <--- MCQ Route
-
-    # --- Dynamic / Parameterized Paths (<int:course_id>) ---
-    path('courses/<int:course_id>/playlist/', CoursePlaylistView.as_view(), name='ayesha-course-playlist'),
-    path('<int:course_id>/enroll/', EnrollInCourseView.as_view(), name='enroll-course'),
-    path('<int:course_id>/submit-quiz/', SubmitQuizView.as_view(), name='submit-quiz'),
-    path('<int:course_id>/submit-assignment/', SubmitAssignmentView.as_view(), name='submit-assignment'),
-    
-    # --- Teacher Dynamic Paths ---
-    path('teacher/course/<int:course_id>/students/', TeacherEnrolledStudentsView.as_view(), name='teacher-enrolled-students'),
-    path('teacher/course/<int:course_id>/assignments/', ViewTeacherAssignmentsView.as_view(), name='view-assignments'),
+    # MCQ Generator Endpoints (Dono aliases support karne ke liye)
+    path('mcqs/generate/', generate_mcqs_view, name='generate_mcqs_api'),
+    path('generate-mcqs/', generate_mcqs_view, name='generate_mcqs_alt'),
 ]

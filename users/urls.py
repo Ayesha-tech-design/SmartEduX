@@ -29,7 +29,9 @@ from .views import (
     certificate_data_api,
     get_system_settings_api,
     save_system_settings_api,
-    user_status_api
+    user_status_api,
+    contact_submit_api,
+    verify_otp_api
 )
 
 urlpatterns = [
@@ -46,6 +48,7 @@ urlpatterns = [
     path('reset-password/', reset_password_api, name='reset_password_api'),
     path('forgot-password/', forgot_password_api, name='forgot_password_api'),
     path('certificate-data/', certificate_data_api, name='certificate_data_api'),
+    path('user/verify-otp/', verify_otp_api, name='verify_otp_api'),
 
     # User Profile Endpoints (Used by admin profile.html)
     path('user/profile/', admin_profile_detail_api, name='user_profile_detail'),
@@ -81,4 +84,7 @@ urlpatterns = [
 
     # Verified Certificates Landing Route
     path('certificate/feature-info/', certificate_data_api, name='verified_certificate_info'),
+
+    # Support & Contact API Routes
+    path('contact/submit/', contact_submit_api, name='contact_submit_api'),
 ]

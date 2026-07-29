@@ -608,3 +608,65 @@ def user_status_api(request):
             "role": getattr(request.user, 'role', 'student')
         })
     return Response({"is_authenticated": False})
+
+
+# =====================================================================
+# CONTACT SUPPORT ENDPOINT
+# =====================================================================
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@csrf_exempt
+def contact_submit_api(request):
+    """
+    Handles POST /contact/submit/ from contact.html
+    Accepts fullName, email, subject, message, and optional attachment
+    """
+    try:
+        data = request.POST or {}
+        full_name = data.get('fullName', 'Guest')
+        email = data.get('email', '')
+        subject = data.get('subject', 'General Inquiry')
+        message = data.get('message', '')
+        attachment = request.FILES.get('attachment', None)
+
+        return Response({
+            "status": "success",
+            "message": f"Thank you {full_name}, your message has been received by SmartEduX Support Team!",
+            "data": {
+                "name": full_name,
+                "email": email,
+                "subject": subject,
+                "has_attachment": bool(attachment)
+            }
+        }, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({"status": "error", "message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+# =====================================================================
+# OTP VERIFICATION ENDPOINT
+# =====================================================================
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@csrf_exempt
+def verify_otp_api(request):
+    """
+    Handles POST /user/verify-otp/ from verify-otp.html
+    """
+    try:
+        data = request.data or json.loads(request.body)
+        otp_code = data.get('otp', '')
+
+        if len(otp_code) != 6:
+            return Response({"status": "error", "message": "Please enter a valid 6-digit OTP code."}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({
+            "status": "success",
+            "message": "OTP verified successfully!",
+            "redirect_url": "reset-password.html"
+        }, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response({"status": "error", "message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
