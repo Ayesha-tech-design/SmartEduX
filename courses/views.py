@@ -390,6 +390,7 @@ def fiverr_course_details_api(request):
     return JsonResponse({
         "status": "success",
         "is_authenticated": user_authenticated,
+        "is_paid": getattr(request.user, 'is_paid', False),
         "course": "Fiverr Freelancing",
         "lessons": playlist_lessons
     }, status=200)
@@ -413,6 +414,7 @@ def graphics_course_details_api(request):
     return JsonResponse({
         "status": "success",
         "is_authenticated": user_authenticated,
+        "is_paid": getattr(request.user, 'is_paid', False),
         "course": "Graphic Designing",
         "lessons": playlist_lessons
     }, status=200)
@@ -428,6 +430,7 @@ def infosec_course_details_api(request):
     return JsonResponse({
         "status": "success",
         "is_authenticated": user_authenticated,
+        "is_paid": getattr(request.user, 'is_paid', False),
         "course": "Information Security",
         "total_lessons": 15
     }, status=200)

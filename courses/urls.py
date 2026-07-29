@@ -13,7 +13,7 @@ from .views import (
     graphics_course_details_api,
     infosec_course_details_api,
     teacher_verification_status_api,
-    generate_mcqs_view  # <-- Make sure this is imported
+    generate_mcqs_view
 )
 
 urlpatterns = [
@@ -31,7 +31,7 @@ urlpatterns = [
     path('infosec-details/', infosec_course_details_api, name='infosec_details'),
     path('teacher-status/', teacher_verification_status_api, name='teacher_status'),
     
-    # MCQ Generator Endpoints (Dono aliases support karne ke liye)
+    # MCQ Generator Endpoints
     path('mcqs/generate/', generate_mcqs_view, name='generate_mcqs_api'),
     path('generate-mcqs/', generate_mcqs_view, name='generate_mcqs_alt'),
 ]
