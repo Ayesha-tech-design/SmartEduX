@@ -13,6 +13,66 @@ from .models import Course, Enrollment, Quiz, Certificate, AssignmentSubmission
 from .serializers import EnrollmentSerializer, QuizSerializer, CertificateSerializer
 
 # =====================================================================
+# DYNAMIC COURSE LIST API (CONNECTED WITH Courses.html)
+# =====================================================================
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def course_list_api(request):
+    """
+    Handles GET /courses/list/ for Courses.html dynamic grid execution
+    """
+    default_courses = [
+        {
+            "title": "Graphics Designing",
+            "icon": "https://img.icons8.com/ios-filled/24/000000/design.png",
+            "desc": "Learn design fundamentals, Photoshop, Illustrator, and create stunning visuals.",
+            "img": "design.jpg",
+            "link": "graphics.html"
+        },
+        {
+            "title": "WordPress Websites",
+            "icon": "https://img.icons8.com/ios-filled/24/000000/wordpress.png",
+            "desc": "Build dynamic websites with WordPress, themes, plugins, and hosting basics.",
+            "img": "wordpress.jpg",
+            "link": "wordpress.html"
+        },
+        {
+            "title": "Fiverr Freelancing",
+            "icon": "https://img.icons8.com/ios-filled/24/000000/freelance.png",
+            "desc": "Create gigs, attract clients, manage orders, and start earning online.",
+            "img": "virtual-assistant-on-fivver.png",
+            "link": "fiverr.html"
+        },
+        {
+            "title": "Information Security",
+            "icon": "https://img.icons8.com/ios-filled/24/000000/security-checked.png",
+            "desc": "Learn cyber security, network protection, cryptography and secure information systems.",
+            "img": "information_security.jpg",
+            "link": "information_security.html"
+        }
+    ]
+    
+    try:
+        db_courses = Course.objects.all()
+        if db_courses.exists():
+            courses_data = []
+            for c in db_courses:
+                courses_data.append({
+                    "title": c.title,
+                    "icon": "https://img.icons8.com/ios-filled/24/000000/course.png",
+                    "desc": c.description,
+                    "img": "design.jpg",
+                    "link": "graphics.html"
+                })
+            return Response({"status": "success", "courses": courses_data}, status=status.HTTP_200_OK)
+    except Exception:
+        pass
+
+    return Response({"status": "success", "courses": default_courses}, status=status.HTTP_200_OK)
+
+
+# =====================================================================
 # COURSE MANAGEMENT MODULE
 # =====================================================================
 
