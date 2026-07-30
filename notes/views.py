@@ -12,6 +12,9 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from youtube_transcript_api import YouTubeTranscriptApi
 from google import genai
+from google.genai import types
+from pydantic import BaseModel, Field
+from typing import List
 
 from .models import VideoNote, QuizQuestion, UserQuizAttempt
 
@@ -21,6 +24,29 @@ CLEAN_KEY = str(RAW_KEY).replace("..key", "").strip() if RAW_KEY else None
 
 client = genai.Client(api_key=CLEAN_KEY) if CLEAN_KEY else None
 
+
+# =====================================================================
+# PYDANTIC SCHEMAS FOR STRUCTURED MCQ OUTPUT
+# =====================================================================
+
+class MCQOptions(BaseModel):
+    A: str = Field(description="Option A text")
+    B: str = Field(description="Option B text")
+    C: str = Field(description="Option C text")
+    D: str = Field(description="Option D text")
+
+class MCQItem(BaseModel):
+    question: str = Field(description="Conceptual question text testing actual lecture understanding")
+    options: MCQOptions
+    answer: str = Field(description="Correct option key strictly matching 'A', 'B', 'C', or 'D'")
+
+class QuizResponseSchema(BaseModel):
+    quiz: List[MCQItem]
+
+
+# =====================================================================
+# 1. MAIN AI NOTES GENERATION ENDPOINT
+# =====================================================================
 
 @api_view(['POST'])
 @permission_classes([AllowAny]) 
@@ -32,10 +58,9 @@ def generate_notes(request):
         if not raw_url:
             return Response({"status": "failed", "error": "YouTube URL is required"}, status=400)
 
-        # 1. CLEAN URL PARSING (Instant Execution)
+        # Clean URL Parsing
         youtube_url = re.sub(r'([?&]t=\d+s?|&ab_channel=[^&]+)', '', raw_url).strip()
 
-        # Extract Video ID
         video_id = ""
         if "v=" in youtube_url:
             video_id = youtube_url.split("v=")[1].split("&")[0]
@@ -47,12 +72,12 @@ def generate_notes(request):
         if not video_id or len(video_id) < 5:
             return Response({"status": "failed", "error": "Invalid YouTube URL format"}, status=400)
 
-        # 2. ACCURATE DATABASE CACHE CHECK (Instant Return)
+        # Database Cache Check
         existing = VideoNote.objects.filter(video_url=youtube_url).order_by('-created_at').first()
         if existing and existing.summary and "Executive Summary" in existing.summary and "I apologize" not in existing.summary:
             saved_questions = getattr(existing, 'questions', None)
             quiz_list = []
-            if saved_questions:
+            if saved_questions and saved_questions.exists():
                 quiz_list = [
                     {
                         "question": q.question_text,
@@ -69,7 +94,7 @@ def generate_notes(request):
                 "quiz": quiz_list
             })
 
-        # 3. FAST REAL TITLE EXTRACTION (YouTube oEmbed API - Ultra Fast 0.2s)
+        # Fast Title Extraction (oEmbed)
         actual_title = f"Define Computer and Its Basics"
         try:
             oembed_url = f"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json"
@@ -82,7 +107,7 @@ def generate_notes(request):
         except Exception as t_err:
             print(f"[SMARTEDUX TITLE WARNING]: oEmbed Fetch Failed -> {t_err}")
 
-        # 4. TRANSCRIPT EXTRACTION
+        # Transcript Extraction
         raw_transcript = ""
         has_transcript = False
         
@@ -93,18 +118,19 @@ def generate_notes(request):
         except Exception:
             try:
                 ytt_api = YouTubeTranscriptApi()
-                transcript_list = ytt_api.list_transcripts(video_id) if hasattr(ytt_api, 'list_transcripts') else YouTubeTranscriptApi.list_transcripts(video_id)
                 fetched = None
                 
                 try:
+                    transcript_list = ytt_api.list(video_id) if hasattr(ytt_api, 'list') else ytt_api.list_transcripts(video_id)
                     fetched = transcript_list.find_transcript(['en', 'hi', 'ur', 'es', 'pt']).fetch()
                 except Exception:
                     try:
                         fetched = transcript_list.find_generated_transcript(['en', 'hi', 'ur', 'es', 'pt']).fetch()
                     except Exception:
-                        for tr in transcript_list:
-                            fetched = tr.fetch()
-                            break
+                        if 'transcript_list' in locals() and transcript_list:
+                            for tr in transcript_list:
+                                fetched = tr.fetch()
+                                break
                 
                 if fetched and isinstance(fetched, list):
                     raw_transcript = " ".join([item['text'] if isinstance(item, dict) else getattr(item, 'text', '') for item in fetched])
@@ -117,7 +143,7 @@ def generate_notes(request):
         if not client:
             return Response({"status": "failed", "error": "GEMINI_API_KEY is not configured in settings.py"}, status=500)
 
-        # 5. HIGHLY ACCURATE & STRICT PROMPT BUILDER
+        # Prompt Builder for Notes
         if has_transcript and len(raw_transcript.strip()) > 50:
             prompt = f"""
 You are SmartEduX AI, an elite academic and technical tutor.
@@ -150,7 +176,6 @@ Act as a subject matter expert and generate comprehensive academic study notes f
 STRICT DIRECTIVES:
 1. NEVER apologize or state that you cannot access external sites or watch videos.
 2. Direct Output: Directly write accurate study notes covering definitions, key principles, components, and practical details for "{actual_title}".
-3. If "{actual_title}" refers to computer basics (e.g., "Define Computer"), cover Input-Process-Output cycle, CPU, Memory, Hardware, and Software.
 
 REQUIRED MARKDOWN FORMAT:
 ## 📌 Executive Summary
@@ -165,21 +190,19 @@ REQUIRED MARKDOWN FORMAT:
 LECTURE TOPIC: {actual_title}
 """
 
-        # 6. ZERO-CRASH MODEL CALL WITH AUTOMATIC FALLBACK
+        # Gemini Model Call for Notes
         try:
             response = client.models.generate_content(
                 model="gemini-2.5-flash",
                 contents=prompt
             )
-        except Exception as api_err:
-            print(f"[SMARTEDUX MODEL FALLBACK TRIGGERED]: {api_err}")
+        except Exception:
             try:
                 response = client.models.generate_content(
                     model="gemini-1.5-flash",
                     contents=prompt
                 )
-            except Exception as fallback_err:
-                print(f"[SMARTEDUX SECONDARY FALLBACK]: {fallback_err}")
+            except Exception:
                 response = client.models.generate_content(
                     model="gemini-2.0-flash",
                     contents=prompt
@@ -187,9 +210,57 @@ LECTURE TOPIC: {actual_title}
 
         summary_res = response.text if response and response.text else f"## 📌 Executive Summary\nStudy notes compiled for {actual_title}."
 
-        # 7. SAVE TO DATABASE
+        # GENERATE 5 CONCEPTUAL MCQS IN SAME RESPONSE
+        quiz_list = []
+        try:
+            quiz_prompt = f"""
+You are SmartEduX AI, an elite university academic tutor.
+Your task is to generate EXACTLY 5 high-quality conceptual Multiple Choice Questions (MCQs)
+based strictly on the actual lecture content provided below.
+
+STRICT INSTRUCTIONS:
+1. Ignore all advertisements, sponsorships, greetings, promos, course offerings, social media handles, and non-academic chatter.
+2. Focus exclusively on core concepts, formulas, definitions, processes, principles, and key takeaways.
+3. Provide 4 distinct options (A, B, C, D) for each question with exactly one correct option ('A', 'B', 'C', or 'D').
+
+LECTURE TOPIC: "{actual_title}"
+LECTURE CONTENT:
+{(raw_transcript if has_transcript else summary_res)[:15000]}
+"""
+            json_config = types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=QuizResponseSchema,
+                temperature=0.2
+            )
+
+            q_res = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=quiz_prompt,
+                config=json_config
+            )
+            raw_q = q_res.text if q_res and q_res.text else "{}"
+            parsed_q = json.loads(raw_q)
+            raw_quiz_items = parsed_q.get("quiz", [])
+
+            for item in raw_quiz_items:
+                opts = item.get("options", {})
+                quiz_list.append({
+                    "question": item.get("question", ""),
+                    "options": {
+                        "A": opts.get("A", ""),
+                        "B": opts.get("B", ""),
+                        "C": opts.get("C", ""),
+                        "D": opts.get("D", "")
+                    },
+                    "answer": str(item.get("answer", "A")).upper().strip()
+                })
+            quiz_list = quiz_list[:5]
+        except Exception as q_err:
+            print(f"[UNIFIED MCQS GENERATION WARNING]: {q_err}")
+
+        # Save to Database
         if request.user.is_authenticated:
-            VideoNote.objects.create(
+            v_note = VideoNote.objects.create(
                 user=request.user,
                 video_title=actual_title,
                 video_url=youtube_url,
@@ -197,11 +268,25 @@ LECTURE TOPIC: {actual_title}
                 summary=summary_res
             )
 
+            if quiz_list and v_note:
+                for q in quiz_list:
+                    opts = q.get("options", {})
+                    QuizQuestion.objects.create(
+                        video_note=v_note,
+                        question_text=q.get("question", ""),
+                        option_a=opts.get("A", ""),
+                        option_b=opts.get("B", ""),
+                        option_c=opts.get("C", ""),
+                        option_d=opts.get("D", ""),
+                        correct_answer=q.get("answer", "A")
+                    )
+
         return Response({
             "status": "success",
             "title": actual_title,
             "notes": summary_res,
-            "summary": summary_res
+            "summary": summary_res,
+            "quiz": quiz_list
         })
 
     except Exception as err:
@@ -218,8 +303,41 @@ def generate_ai_notes(request):
 
 
 # =====================================================================
-# HISTORY & STUDENT NOTES MODULES (100% Intact & Untouched)
+# 2. OTHER ENDPOINTS (UNTOUCHED)
 # =====================================================================
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def generate_quiz_api(request):
+    return generate_notes(request)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_video_quiz_api(request, note_id):
+    try:
+        questions = QuizQuestion.objects.filter(video_note_id=note_id)
+        quiz_data = [
+            {
+                "id": q.id,
+                "question": q.question_text,
+                "options": {
+                    "A": q.option_a,
+                    "B": q.option_b,
+                    "C": q.option_c,
+                    "D": q.option_d
+                },
+                "answer": q.correct_answer
+            } for q in questions
+        ]
+        return Response({
+            "status": "success",
+            "total_questions": len(quiz_data),
+            "quiz": quiz_data
+        }, status=200)
+    except Exception as err:
+        return Response({"status": "failed", "error": str(err)}, status=500)
+
 
 @api_view(['POST'])
 @permission_classes([AllowAny])  
@@ -312,5 +430,97 @@ def delete_student_note_api(request, note_id):
         return Response({"success": True, "message": "Note deleted successfully!"}, status=200)
     except VideoNote.DoesNotExist:
         return Response({"success": False, "message": "Note not found!"}, status=404)
+    except Exception as err:
+        return Response({"status": "failed", "error": str(err)}, status=500)
+
+
+# =====================================================================
+# 3. IMPORTANT NOTES / KEY POINTS ENDPOINT
+# =====================================================================
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def generate_important_notes_api(request):
+    try:
+        raw_url = (request.data.get('youtube_url') or request.data.get('video_url') or '').strip()
+        requested_count = request.data.get('count', 5)
+
+        try:
+            requested_count = int(requested_count)
+        except (TypeError, ValueError):
+            requested_count = 5
+
+        if requested_count not in [5, 10]:
+            requested_count = 5
+
+        if not raw_url:
+            return Response({"status": "failed", "error": "YouTube URL is required"}, status=400)
+
+        youtube_url = re.sub(r'([?&]t=\d+s?|&ab_channel=[^&]+)', '', raw_url).strip()
+        video_id = ""
+
+        if "v=" in youtube_url:
+            video_id = youtube_url.split("v=")[1].split("&")[0]
+        elif "youtu.be/" in youtube_url:
+            video_id = youtube_url.split("youtu.be/")[1].split("?")[0]
+        else:
+            video_id = youtube_url.rstrip("/").split("/")[-1]
+
+        if not video_id or len(video_id) < 5:
+            return Response({"status": "failed", "error": "Invalid YouTube URL format"}, status=400)
+
+        if not client:
+            return Response({"status": "failed", "error": "GEMINI_API_KEY is not configured"}, status=500)
+
+        existing = VideoNote.objects.filter(video_url=youtube_url).order_by('-created_at').first()
+        transcript_text = existing.transcript if existing and existing.transcript else ""
+
+        if not transcript_text.strip():
+            try:
+                transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['en', 'hi', 'ur', 'es', 'pt'])
+                transcript_text = " ".join([item['text'] for item in transcript])
+            except Exception:
+                pass
+
+        if not transcript_text.strip() and existing and existing.summary:
+            transcript_text = existing.summary
+
+        if not transcript_text.strip():
+            return Response({"status": "failed", "error": "No educational content retrieved."}, status=404)
+
+        important_prompt = f"""
+You are SmartEduX AI. Generate EXACTLY {requested_count} important educational points based on:
+{transcript_text[:15000]}
+Return ONLY a valid JSON array of strings.
+"""
+        response = client.models.generate_content(model="gemini-2.5-flash", contents=important_prompt)
+        raw_response = response.text if response and response.text else "[]"
+
+        if "```json" in raw_response:
+            raw_response = raw_response.split("```json", 1)[1].split("```", 1)[0].strip()
+        elif "```" in raw_response:
+            raw_response = raw_response.split("```", 1)[1].split("```", 1)[0].strip()
+
+        important_notes = []
+        try:
+            parsed = json.loads(raw_response)
+            if isinstance(parsed, list):
+                important_notes = [str(item).strip() for item in parsed if str(item).strip()]
+        except Exception:
+            lines = raw_response.splitlines()
+            for line in lines:
+                cleaned = re.sub(r'^\s*(?:[-•*]|\d+[.)])\s*', '', line).strip()
+                if cleaned:
+                    important_notes.append(cleaned)
+
+        important_notes = important_notes[:requested_count]
+
+        return Response({
+            "status": "success",
+            "video_id": video_id,
+            "count": len(important_notes),
+            "important_notes": important_notes
+        }, status=200)
+
     except Exception as err:
         return Response({"status": "failed", "error": str(err)}, status=500)
